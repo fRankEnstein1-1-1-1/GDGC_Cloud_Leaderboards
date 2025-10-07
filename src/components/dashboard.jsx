@@ -67,7 +67,7 @@ const fetchExcelData = async () => {
 
 
 completedPaths: parseInt(row['ofskillbadgescompleted']) || 0,
-      totalPaths: 15,
+      totalPaths: 19,
       eligibleForGoodies:
         (row.eligibleforgoodies || '').toString().toLowerCase() === 'true'
     }));
