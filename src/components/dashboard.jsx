@@ -33,9 +33,9 @@ const fetchExcelData = async () => {
       name: row.username || 'Unknown',
 
   arcadeGames: (() => {
-  // 🔍 Debug: print all keys in this row once to verify what exists
-  console.log("Row keys:", Object.keys(row));
-  console.log("Row arcade raw value:", row["ofarcadegamescompleted"]);
+  
+ // console.log("Row keys:", Object.keys(row));
+  //console.log("Row arcade raw value:", row["ofarcadegamescompleted"]);
 
   // Dynamically detect the key (case-insensitive)
   const arcadeKey = Object.keys(row).find(k =>
@@ -261,7 +261,21 @@ const Dashboard = () => {
                   <TableRow key={student.id}>
                     <TableCell className="text-center">{getRankIcon(student.id - 1)}</TableCell>
                     <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell>{`${student.completedPaths} / ${student.totalPaths}`}</TableCell>
+                    {/* <TableCell>{`${student.completedPaths} / ${student.totalPaths}`}</TableCell> */}
+   <TableCell>
+  <div className="w-full bg-gray-200 rounded-full h-3 dark:bg-gray-700">
+    <div
+      className="h-3 rounded-full transition-all duration-500 ease-in-out"
+      style={{
+        width: `${(student.completedPaths / student.totalPaths) * 100}%`,
+        background: "linear-gradient(to right, #4285F4, #EA4335, #FBBC05, #34A853)",
+      }}
+    ></div>
+  </div>
+  <p className="text-xs text-center mt-1">{`${student.completedPaths} / ${student.totalPaths}`}</p>
+</TableCell>
+
+
                     <TableCell>
                       {student.arcadeGames === 'Yes' ?(
                         <Badge className="bg-green-500 hover:bg-green-600 text-green-100 dark:bg-green-600/40">
