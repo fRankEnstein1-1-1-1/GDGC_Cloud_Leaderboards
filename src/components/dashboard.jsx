@@ -263,9 +263,9 @@ const Dashboard = () => {
                     <TableCell className="font-medium">{student.name}</TableCell>
                     {/* <TableCell>{`${student.completedPaths} / ${student.totalPaths}`}</TableCell> */}
    <TableCell>
-  <div className="w-full bg-gray-200 rounded-full h-3 dark:bg-gray-700">
+  <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
     <div
-      className="h-3 rounded-full transition-all duration-500 ease-in-out"
+      className="h-2 rounded-full transition-all duration-500 ease-in-out"
       style={{
         width: `${(student.completedPaths / student.totalPaths) * 100}%`,
         background: "linear-gradient(to right, #4285F4, #EA4335, #FBBC05, #34A853)",
