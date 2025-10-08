@@ -12,7 +12,7 @@ import * as XLSX from 'xlsx';
 // this function will convert the excel data to required json
 const fetchExcelData = async () => {
   try {
-    const response = await fetch('/H.xlsx');
+    const response = await fetch('/B.xlsx');
     const arrayBuffer = await response.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     const sheetName = workbook.SheetNames[0];
