@@ -136,24 +136,50 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchExcelData();
-       const sortedStudents = data.sort((a, b) => (b.completedPaths || 0) - (a.completedPaths || 0));
-        setStudents(sortedStudents.map((s, i) => ({ ...s, id: i + 1 })));        
-        setError(null);
-      } catch (err) {
-        setError('Failed to load student data');
-        console.error('Error loading data:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+useEffect(() => {
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchExcelData();
 
-    loadData();
-  }, []);
+      // Load previous order if available
+      const previousOrder = JSON.parse(localStorage.getItem("previousOrder")) || [];
+
+      const sortedStudents = data
+        .map((student, index) => {
+          const prevRank = previousOrder.findIndex(p => p.name === student.name);
+          return { ...student, originalIndex: index, prevRank };
+        })
+        .sort((a, b) => {
+          // 1️⃣ Main criterion: completed paths
+          if (b.completedPaths !== a.completedPaths)
+            return b.completedPaths - a.completedPaths;
+          // 2️⃣ Keep previous leaderboard order if tied
+          if (a.prevRank !== -1 && b.prevRank !== -1)
+            return a.prevRank - b.prevRank;
+          // 3️⃣ Fallback to Excel order
+          return a.originalIndex - b.originalIndex;
+        });
+
+      // Save current order for next comparison
+      localStorage.setItem(
+        "previousOrder",
+        JSON.stringify(sortedStudents.map(s => ({ name: s.name })))
+      );
+
+      setStudents(sortedStudents.map((s, i) => ({ ...s, id: i + 1 })));
+      setError(null);
+    } catch (err) {
+      setError("Failed to load student data");
+      console.error("Error loading data:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  loadData();
+}, []);
+
 
 
   // const filteredStudents = students.filter(student =>
