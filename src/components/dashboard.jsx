@@ -9,7 +9,7 @@ import { ThemeProvider, useTheme } from '@/components/theme-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import * as XLSX from 'xlsx';
 import {db} from '../firebase'
-import {collection, getDocs, setDoc, doc} from "firebase/firestore";
+import {collection, getDocs, setDoc, doc , writeBatch} from "firebase/firestore";
 // this function will convert the excel data to required json
 const fetchExcelData = async () => {
   try {
@@ -141,47 +141,42 @@ useEffect(() => {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchExcelData();
 
-      // 🔹 Fetch previous order (to preserve history + timestamps)
+      // 1️⃣ Fetch Excel data once
+      const excelData = await fetchExcelData();
+
+      // 2️⃣ Fetch previous leaderboard order only once
       const orderSnapshot = await getDocs(collection(db, "leaderboard_order"));
       const previousOrder = orderSnapshot.docs.map(doc => doc.data());
 
-      // 🔹 Sort logic
-      const sortedStudents = data
+      // 3️⃣ Sort logic (unchanged, but safe)
+      const sortedStudents = excelData
         .map((student, index) => {
           const prev = previousOrder.find(p => p.name === student.name);
           return {
             ...student,
             originalIndex: index,
-            prevRank: prev ? prev.rank : Infinity,
-            lastCompletedAt: prev?.lastCompletedAt || null, // ⏰ carry old timestamp
+            prevRank: prev?.rank ?? Infinity,
+            lastCompletedAt: prev?.lastCompletedAt ?? null,
           };
         })
         .sort((a, b) => {
-          // 1️⃣ Highest completed paths first
           if (b.completedPaths !== a.completedPaths)
             return b.completedPaths - a.completedPaths;
-
-          // 2️⃣ Earlier completer ranks higher
-          if (a.lastCompletedAt && b.lastCompletedAt) {
+          if (a.lastCompletedAt && b.lastCompletedAt)
             return new Date(a.lastCompletedAt) - new Date(b.lastCompletedAt);
-          }
-
-          // 3️⃣ If both completed but no timestamps, preserve previous rank
-          if (previousOrder.length && a.prevRank !== Infinity && b.prevRank !== Infinity)
+          if (a.prevRank !== Infinity && b.prevRank !== Infinity)
             return a.prevRank - b.prevRank;
-
-          // 4️⃣ fallback to order in Excel
           return a.originalIndex - b.originalIndex;
         });
 
-      // 🔹 Save current order + timestamps globally to Firestore
-      const batchWrites = sortedStudents.map(async (s, i) => {
-        const ref = doc(db, "leaderboard_order", s.name);
+      // 4️⃣ Batch write — only update changed docs
+      const batch = writeBatch(db);
+      let updatesCount = 0;
+
+      sortedStudents.forEach((s, i) => {
         const prev = previousOrder.find(p => p.name === s.name);
 
-        // 🕓 Preserve the first time they reached full completion
         const alreadyCompleted = prev && prev.completedPaths === s.totalPaths;
         const newCompletion = s.completedPaths === s.totalPaths;
 
@@ -190,24 +185,38 @@ useEffect(() => {
             ? new Date().toISOString()
             : prev?.lastCompletedAt || null;
 
-        await setDoc(ref, {
-          name: s.name,
-          rank: i + 1,
-          completedPaths: s.completedPaths,
-          totalPaths: s.totalPaths,
-          lastCompletedAt,
-          updatedAt: new Date().toISOString(),
-        });
+        const hasChanges =
+          !prev ||
+          prev.completedPaths !== s.completedPaths ||
+          prev.rank !== i + 1 ||
+          prev.lastCompletedAt !== lastCompletedAt;
+
+        if (hasChanges) {
+          const ref = doc(db, "leaderboard_order", s.name);
+          batch.set(ref, {
+            name: s.name,
+            rank: i + 1,
+            completedPaths: s.completedPaths,
+            totalPaths: s.totalPaths,
+            lastCompletedAt,
+            updatedAt: new Date().toISOString(),
+          });
+          updatesCount++;
+        }
       });
 
-      await Promise.all(batchWrites);
+      if (updatesCount > 0) {
+        console.log(`✅ ${updatesCount} Firestore documents updated.`);
+        await batch.commit();
+      } else {
+        console.log("✨ No changes detected, skipping Firestore writes.");
+      }
 
-      // 🔹 Update UI
       setStudents(sortedStudents.map((s, i) => ({ ...s, id: i + 1 })));
       setError(null);
     } catch (err) {
-      setError("Failed to load student data");
       console.error("Error loading data:", err);
+      setError("Failed to load student data");
     } finally {
       setIsLoading(false);
     }
