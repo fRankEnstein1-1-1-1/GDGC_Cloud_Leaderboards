@@ -13,7 +13,7 @@ import {collection, getDocs, setDoc, doc , writeBatch} from "firebase/firestore"
 // this function will convert the excel data to required json
 const fetchExcelData = async () => {
   try {
-    const response = await fetch('/H.xlsx');
+    const response = await fetch('/1.xlsx');
     const arrayBuffer = await response.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     const sheetName = workbook.SheetNames[0];
@@ -138,21 +138,34 @@ useEffect(() => {
   const loadData = async () => {
     try {
       setIsLoading(true);
+      setError(null);
 
-      //Fetch Excel data once
+      // --- Safety timeout ---
+      const timeout = setTimeout(() => {
+        setIsLoading(false);
+        setError(" Loading timed out. Please refresh or try again later.");
+      }, 15000);
+
+      // --- 1. Fetch Excel Data ---
       const excelData = await fetchExcelData();
+      if (!excelData || excelData.length === 0) {
+        clearTimeout(timeout);
+        throw new Error("Empty or invalid Excel data.");
+      }
 
-      // 2 Fetch previous leaderboard order once
+      // --- 2. Fetch Previous Firestore Order ---
       const orderSnapshot = await getDocs(collection(db, "leaderboard_order"));
       const previousOrder = orderSnapshot.docs.map(doc => doc.data());
 
-      //  Map and sort with LOCKED RANK logic
+      // --- 3. Enrich Students ---
       const enrichedStudents = excelData.map((student, index) => {
         const prev = previousOrder.find(p => p.name === student.name);
 
-        const isFullCompletion = student.completedPaths === student.totalPaths;
-        const prevWasFull = prev?.completedPaths === prev?.totalPaths;
-        const locked = prevWasFull && prev?.rank !== undefined; // lock if was full earlier
+        //  Lock rule: totalPaths === 19
+        const shouldBeLocked = student.totalPaths === 19 && student.completedPaths === 19;
+
+        // Respect previous lock if it exists
+        const locked = prev?.locked || shouldBeLocked;
 
         return {
           ...student,
@@ -163,11 +176,11 @@ useEffect(() => {
         };
       });
 
-      //  Separate locked/unlocked
+      // --- 4. Separate Locked and Unlocked Students ---
       const lockedStudents = enrichedStudents.filter(s => s.locked);
       const unlockedStudents = enrichedStudents.filter(s => !s.locked);
 
-      
+      // --- 5. Sort Unlocked Students ---
       unlockedStudents.sort((a, b) => {
         if (b.completedPaths !== a.completedPaths)
           return b.completedPaths - a.completedPaths;
@@ -178,40 +191,45 @@ useEffect(() => {
         return a.originalIndex - b.originalIndex;
       });
 
-      
+      // --- 6. Sort Locked Students (preserve old rank) ---
       lockedStudents.sort((a, b) => a.prevRank - b.prevRank);
+
+      // --- 7. Merge Locked + Unlocked ---
       const finalStudents = [];
       let unlockedIndex = 0;
 
-      for (let i = 0; i < enrichedStudents.length; i++) {
-        const lockedAtThisRank = lockedStudents.find(s => s.prevRank === i + 1);
+      for (let rank = 1; rank <= enrichedStudents.length; rank++) {
+        const lockedAtThisRank = lockedStudents.find(s => s.prevRank === rank);
+
         if (lockedAtThisRank) {
-          finalStudents.push(lockedAtThisRank);
+          finalStudents.push({ ...lockedAtThisRank, rank });
         } else if (unlockedIndex < unlockedStudents.length) {
-          finalStudents.push({ ...unlockedStudents[unlockedIndex], rank: i + 1 });
+          finalStudents.push({ ...unlockedStudents[unlockedIndex], rank });
           unlockedIndex++;
         }
       }
 
-      
+      // --- 8. Manual Swaps (intentional overrides) ---
       const swapRanks = (arr, a, b) => {
+        if (a > arr.length || b > arr.length) return;
         const temp = arr[a - 1];
         arr[a - 1] = arr[b - 1];
         arr[b - 1] = temp;
       };
 
-      swapRanks(finalStudents, 2, 6);
-      swapRanks(finalStudents, 3, 4);
+     // swapRanks(finalStudents, 2, 6);
+      //swapRanks(finalStudents, 3, 4);
 
-    
+      // Ensure rank order after swap
       finalStudents.forEach((s, i) => (s.rank = i + 1));
 
-      
+      // --- 9. Firestore Batch Update ---
       const batch = writeBatch(db);
       let updatesCount = 0;
 
       finalStudents.forEach((s, i) => {
         const prev = previousOrder.find(p => p.name === s.name);
+
         const alreadyCompleted = prev && prev.completedPaths === s.totalPaths;
         const newCompletion = s.completedPaths === s.totalPaths;
 
@@ -220,20 +238,36 @@ useEffect(() => {
             ? new Date().toISOString()
             : prev?.lastCompletedAt || null;
 
+        //  If locked in Firestore, NEVER change anything except completedPaths
+        if (prev?.locked) {
+          if (prev.completedPaths !== s.completedPaths) {
+            const ref = doc(db, "leaderboard_order", s.name);
+            batch.update(ref, {
+              completedPaths: s.completedPaths,
+              totalPaths: s.totalPaths,
+              updatedAt: new Date().toISOString(),
+            });
+            updatesCount++;
+          }
+          return; 
+        }
+
         const hasChanges =
           !prev ||
           prev.completedPaths !== s.completedPaths ||
           prev.rank !== (prev?.rank ?? i + 1) ||
-          prev.lastCompletedAt !== lastCompletedAt;
+          prev.lastCompletedAt !== lastCompletedAt ||
+          prev.locked !== s.locked;
 
         if (hasChanges) {
           const ref = doc(db, "leaderboard_order", s.name);
           batch.set(ref, {
             name: s.name,
-            rank: s.locked ? prev.rank : i + 1,
+            rank: s.rank,
             completedPaths: s.completedPaths,
             totalPaths: s.totalPaths,
             lastCompletedAt,
+            locked: s.locked, //  store locked state
             updatedAt: new Date().toISOString(),
           });
           updatesCount++;
@@ -241,20 +275,22 @@ useEffect(() => {
       });
 
       if (updatesCount > 0) {
-        console.log(`✅ ${updatesCount} Firestore documents updated.`);
         await batch.commit();
+        console.log(`✅ ${updatesCount} Firestore documents updated.`);
       } else {
-        console.log("✨ No changes detected, skipping Firestore writes.");
+        console.log("✨ No Firestore updates needed.");
       }
 
+      // --- 10. Set Final State ---
       setStudents(finalStudents.map((s, i) => ({ ...s, id: i + 1 })));
+      clearTimeout(timeout);
       setError(null);
     } catch (err) {
-      console.error("Error loading data:", err);
+      console.error("Error loading leaderboard:", err);
       if (err.code === "resource-exhausted") {
-        setError("⚠️ Firestore quota exceeded. Please try again later.");
+        setError(" Firestore quota exceeded. Please try again later.");
       } else {
-        setError("Failed to load student data. Please refresh or try again.");
+        setError("Failed to load leaderboard data. Please refresh or try again.");
       }
     } finally {
       setIsLoading(false);
@@ -263,8 +299,6 @@ useEffect(() => {
 
   loadData();
 }, []);
-
-
 
 
 
