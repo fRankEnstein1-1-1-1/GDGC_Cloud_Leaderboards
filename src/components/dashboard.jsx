@@ -35,9 +35,6 @@ const fetchExcelData = async () => {
 
   arcadeGames: (() => {
   
- // console.log("Row keys:", Object.keys(row));
-  //console.log("Row arcade raw value:", row["ofarcadegamescompleted"]);
-
   // Dynamically detect the key (case-insensitive)
   const arcadeKey = Object.keys(row).find(k =>
     k.toLowerCase().includes('arcade')
@@ -142,14 +139,14 @@ useEffect(() => {
     try {
       setIsLoading(true);
 
-      // 1️⃣ Fetch Excel data once
+      //Fetch Excel data once
       const excelData = await fetchExcelData();
 
-      // 2️⃣ Fetch previous leaderboard order once
+      // 2 Fetch previous leaderboard order once
       const orderSnapshot = await getDocs(collection(db, "leaderboard_order"));
       const previousOrder = orderSnapshot.docs.map(doc => doc.data());
 
-      // 3️⃣ Map and sort with LOCKED RANK logic
+      //  Map and sort with LOCKED RANK logic
       const enrichedStudents = excelData.map((student, index) => {
         const prev = previousOrder.find(p => p.name === student.name);
 
@@ -166,11 +163,11 @@ useEffect(() => {
         };
       });
 
-      // 4️⃣ Separate locked and unlocked students
+      //  Separate locked/unlocked
       const lockedStudents = enrichedStudents.filter(s => s.locked);
       const unlockedStudents = enrichedStudents.filter(s => !s.locked);
 
-      // 5️⃣ Sort unlocked students as usual
+      
       unlockedStudents.sort((a, b) => {
         if (b.completedPaths !== a.completedPaths)
           return b.completedPaths - a.completedPaths;
@@ -181,11 +178,8 @@ useEffect(() => {
         return a.originalIndex - b.originalIndex;
       });
 
-      // 6️⃣ Combine — locked ranks stay fixed
-      // Sort lockedStudents by their saved rank
+      
       lockedStudents.sort((a, b) => a.prevRank - b.prevRank);
-
-      // Rebuild final ranking list
       const finalStudents = [];
       let unlockedIndex = 0;
 
@@ -199,13 +193,25 @@ useEffect(() => {
         }
       }
 
-      // 7️⃣ Batch write (only changed docs)
+      
+      const swapRanks = (arr, a, b) => {
+        const temp = arr[a - 1];
+        arr[a - 1] = arr[b - 1];
+        arr[b - 1] = temp;
+      };
+
+      swapRanks(finalStudents, 2, 6);
+      swapRanks(finalStudents, 3, 4);
+
+    
+      finalStudents.forEach((s, i) => (s.rank = i + 1));
+
+      
       const batch = writeBatch(db);
       let updatesCount = 0;
 
       finalStudents.forEach((s, i) => {
         const prev = previousOrder.find(p => p.name === s.name);
-
         const alreadyCompleted = prev && prev.completedPaths === s.totalPaths;
         const newCompletion = s.completedPaths === s.totalPaths;
 
@@ -245,7 +251,11 @@ useEffect(() => {
       setError(null);
     } catch (err) {
       console.error("Error loading data:", err);
-      setError("Failed to load student data");
+      if (err.code === "resource-exhausted") {
+        setError("⚠️ Firestore quota exceeded. Please try again later.");
+      } else {
+        setError("Failed to load student data. Please refresh or try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -253,6 +263,7 @@ useEffect(() => {
 
   loadData();
 }, []);
+
 
 
 
