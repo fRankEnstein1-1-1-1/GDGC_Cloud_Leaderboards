@@ -145,36 +145,65 @@ useEffect(() => {
       // 1️⃣ Fetch Excel data once
       const excelData = await fetchExcelData();
 
-      // 2️⃣ Fetch previous leaderboard order only once
+      // 2️⃣ Fetch previous leaderboard order once
       const orderSnapshot = await getDocs(collection(db, "leaderboard_order"));
       const previousOrder = orderSnapshot.docs.map(doc => doc.data());
 
-      // 3️⃣ Sort logic (unchanged, but safe)
-      const sortedStudents = excelData
-        .map((student, index) => {
-          const prev = previousOrder.find(p => p.name === student.name);
-          return {
-            ...student,
-            originalIndex: index,
-            prevRank: prev?.rank ?? Infinity,
-            lastCompletedAt: prev?.lastCompletedAt ?? null,
-          };
-        })
-        .sort((a, b) => {
-          if (b.completedPaths !== a.completedPaths)
-            return b.completedPaths - a.completedPaths;
-          if (a.lastCompletedAt && b.lastCompletedAt)
-            return new Date(a.lastCompletedAt) - new Date(b.lastCompletedAt);
-          if (a.prevRank !== Infinity && b.prevRank !== Infinity)
-            return a.prevRank - b.prevRank;
-          return a.originalIndex - b.originalIndex;
-        });
+      // 3️⃣ Map and sort with LOCKED RANK logic
+      const enrichedStudents = excelData.map((student, index) => {
+        const prev = previousOrder.find(p => p.name === student.name);
 
-      // 4️⃣ Batch write — only update changed docs
+        const isFullCompletion = student.completedPaths === student.totalPaths;
+        const prevWasFull = prev?.completedPaths === prev?.totalPaths;
+        const locked = prevWasFull && prev?.rank !== undefined; // lock if was full earlier
+
+        return {
+          ...student,
+          originalIndex: index,
+          prevRank: prev?.rank ?? Infinity,
+          lastCompletedAt: prev?.lastCompletedAt ?? null,
+          locked,
+        };
+      });
+
+      // 4️⃣ Separate locked and unlocked students
+      const lockedStudents = enrichedStudents.filter(s => s.locked);
+      const unlockedStudents = enrichedStudents.filter(s => !s.locked);
+
+      // 5️⃣ Sort unlocked students as usual
+      unlockedStudents.sort((a, b) => {
+        if (b.completedPaths !== a.completedPaths)
+          return b.completedPaths - a.completedPaths;
+        if (a.lastCompletedAt && b.lastCompletedAt)
+          return new Date(a.lastCompletedAt) - new Date(b.lastCompletedAt);
+        if (a.prevRank !== Infinity && b.prevRank !== Infinity)
+          return a.prevRank - b.prevRank;
+        return a.originalIndex - b.originalIndex;
+      });
+
+      // 6️⃣ Combine — locked ranks stay fixed
+      // Sort lockedStudents by their saved rank
+      lockedStudents.sort((a, b) => a.prevRank - b.prevRank);
+
+      // Rebuild final ranking list
+      const finalStudents = [];
+      let unlockedIndex = 0;
+
+      for (let i = 0; i < enrichedStudents.length; i++) {
+        const lockedAtThisRank = lockedStudents.find(s => s.prevRank === i + 1);
+        if (lockedAtThisRank) {
+          finalStudents.push(lockedAtThisRank);
+        } else if (unlockedIndex < unlockedStudents.length) {
+          finalStudents.push({ ...unlockedStudents[unlockedIndex], rank: i + 1 });
+          unlockedIndex++;
+        }
+      }
+
+      // 7️⃣ Batch write (only changed docs)
       const batch = writeBatch(db);
       let updatesCount = 0;
 
-      sortedStudents.forEach((s, i) => {
+      finalStudents.forEach((s, i) => {
         const prev = previousOrder.find(p => p.name === s.name);
 
         const alreadyCompleted = prev && prev.completedPaths === s.totalPaths;
@@ -188,14 +217,14 @@ useEffect(() => {
         const hasChanges =
           !prev ||
           prev.completedPaths !== s.completedPaths ||
-          prev.rank !== i + 1 ||
+          prev.rank !== (prev?.rank ?? i + 1) ||
           prev.lastCompletedAt !== lastCompletedAt;
 
         if (hasChanges) {
           const ref = doc(db, "leaderboard_order", s.name);
           batch.set(ref, {
             name: s.name,
-            rank: i + 1,
+            rank: s.locked ? prev.rank : i + 1,
             completedPaths: s.completedPaths,
             totalPaths: s.totalPaths,
             lastCompletedAt,
@@ -212,7 +241,7 @@ useEffect(() => {
         console.log("✨ No changes detected, skipping Firestore writes.");
       }
 
-      setStudents(sortedStudents.map((s, i) => ({ ...s, id: i + 1 })));
+      setStudents(finalStudents.map((s, i) => ({ ...s, id: i + 1 })));
       setError(null);
     } catch (err) {
       console.error("Error loading data:", err);
@@ -224,6 +253,7 @@ useEffect(() => {
 
   loadData();
 }, []);
+
 
 
 
