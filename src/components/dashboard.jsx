@@ -321,6 +321,9 @@ useEffect(() => {
   loadData();
 }, []);
 
+ 
+
+
 
   // const filteredStudents = students.filter(student =>
   //   student.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -337,7 +340,7 @@ useEffect(() => {
       case 0: return <Trophy className="ml-auto mr-auto h-6 w-6 text-yellow-500" />;
       case 1: return <Medal className="ml-auto mr-auto h-6 w-6 text-gray-400" />;
       case 2: return <Medal className="ml-auto mr-auto h-6 w-6 text-amber-600" />;
-      default: return index + 1;
+      default: return index +1;
     }
   };
 
@@ -424,8 +427,9 @@ useEffect(() => {
               </TableHeader>
               <TableBody>
                 {filteredStudents.map((student, index) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="text-center">{getRankIcon(student.id - 1)}</TableCell>
+                  <TableRow key={ index-1}>
+
+                    <TableCell className="text-center">{getRankIcon(index )}</TableCell>
                     <TableCell className="font-medium">{student.name}</TableCell>
                     {/* <TableCell>{`${student.completedPaths} / ${student.totalPaths}`}</TableCell> */}
    <TableCell>
