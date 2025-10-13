@@ -76,7 +76,6 @@ completedPaths: Number((row['ofskillbadgescompleted'] || '0').toString().trim().
 };
 
 
-
 const ModeToggle = () => {
   const { setTheme } = useTheme();
 
@@ -238,6 +237,8 @@ useEffect(() => {
        swapRanks(finalStudents, 14, 22);
        swapRanks(finalStudents, 12, 28);
        swapRanks(finalStudents, 18, 23);
+       swapRanks(finalStudents, 24, 114);
+       swapRanks(finalStudents, 23, 24);
        
 
 
