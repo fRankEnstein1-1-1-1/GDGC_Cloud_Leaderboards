@@ -37,23 +37,23 @@ import "./App.css";
 
 function App() {
   return (
-    // <ThemeProvider defaultTheme="system" enableSystem>
-    //   <Router>
-    //     <Routes>
-    //       {/* Public dashboard */}
-    //       <Route path="/" element={<Dashboard />} />
+    <ThemeProvider defaultTheme="system" enableSystem>
+      <Router>
+        <Routes>
+          {/* Public dashboard */}
+          <Route path="/" element={<Dashboard />} />
 
-    //       {/* Admin-only route */}
-    //       <Route path="/admin" element={<Admin />} />
-    //     </Routes>
-    //   </Router>
-    // </ThemeProvider>
-     <div >
-      <h1 className="text-3xl font-bold mb-4"> Site Under Maintenance</h1>
-      <p className="text-lg text-gray-600">
-        Please check back after notifications. Sorry for the inconvenience!
-      </p>
-    </div>
+          {/* Admin-only route */}
+          <Route path="/admin" element={<Admin />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
+    //  <div >
+    //   <h1 className="text-3xl font-bold mb-4"> Site Under Maintenance</h1>
+    //   <p className="text-lg text-gray-600">
+    //     Please check back after notifications. Sorry for the inconvenience!
+    //   </p>
+    // </div>
   );
 }
 
