@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect,useCallback,useMemo} from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trophy, Medal, Check, Users, Star, Gift, Github, Twitter, Instagram, Linkedin, Moon, Sun , Link} from 'lucide-react';
+import { Trophy, Medal, Check, Users, Star, Gift, Github, Twitter, Instagram, Linkedin, Moon, Sun ,Zap,Clock, Link} from 'lucide-react';
 import { ThemeProvider, useTheme } from '@/components/theme-provider';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import * as XLSX from 'xlsx';
@@ -103,29 +103,96 @@ const ModeToggle = () => {
   );
 };
 
+// --- 1. Countdown Logic (Reusable Hook) ---
+const useCountdown = (targetDate) => {
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  const calculateTimeLeft = useCallback(() => {
+    const now = new Date().getTime();
+    const difference = targetDate - now;
+    setTimeLeft(difference > 0 ? difference : 0);
+  }, [targetDate]);
+
+  useEffect(() => {
+    // Run once on mount to avoid initial delay
+    calculateTimeLeft();
+    
+    const timer = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(timer);
+  }, [calculateTimeLeft]);
+
+  const formatTime = () => {
+    if (timeLeft <= 0) {
+      return { days: 0, hours: 0, minutes: 0, expired: true };
+    }
+    const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    return { days, hours, minutes, expired: false };
+  };
+
+  return formatTime();
+};
+
+
+// --- 2. Your Updated Navbar Component ---
 const Navbar = () => {
+  // Set the end date for the countdown
+  const targetTimestamp = useMemo(() => new Date('October 30, 2025 23:59:00').getTime(), []);
+  const { days, hours, minutes, expired } = useCountdown(targetTimestamp);
+  
+  // Helper to add a leading zero (e.g., 9 -> "09")
+  const pad = (num) => String(num).padStart(2, '0');
+
+  const TimerDisplay = () => {
+    if (expired) {
+      return (
+        <span className="flex items-center ml-4 rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700 shadow-sm">
+          <Zap className="mr-1 h-3 w-3" />
+          Event Closed
+        </span>
+      );
+    }
+    return (
+      <div className="ml-4 flex items-center rounded-lg bg-blue-100 p-1 px-2 font-mono text-xs font-semibold text-blue-800 shadow-inner sm:text-sm">
+        <Clock className="mr-1 hidden h-3 w-3 sm:inline" />
+        <span className="sm:hidden">{pad(days)}d {pad(hours)}h</span>
+        <span className="hidden sm:inline">{pad(days)}d {pad(hours)}h {pad(minutes)}m</span>
+      </div>
+    );
+  };
+
   return (
-    <nav className="flex items-center py-4 px-4 sm:px-6 bg-background border-b">
-      <img src='/logo.png' className='h-[2rem] mr-2' alt="Logo"/>
-      <h1 className="text-lg sm:text-xl font-bold truncate mr-auto text-left">
-        <span className="hidden sm:inline">Google Developer Group on Campus</span>
-        <span className="sm:hidden">GDGC</span>
-      </h1>
-      <div className="flex items-center space-x-2 ">
-      <a href="https://gdgc.dbit.in/" target="_blank" rel="noopener noreferrer" >
-          <Link className="h-5 w-5"></Link>
+    <nav className="flex items-center border-b bg-background py-4 px-4 sm:px-6">
+      <img src='/logo.png' className='mr-2 h-[2rem]' alt="Logo"/>
+      
+      {/* Title and Timer are now grouped together for better alignment */}
+      <div className="mr-auto flex items-center">
+        <h1 className="truncate text-lg font-bold sm:text-xl">
+          <span className="hidden sm:inline">Google Developer Group on Campus</span>
+          <span className="sm:hidden">GDGC</span>
+        </h1>
+        <TimerDisplay />
+      </div>
+
+      {/* Social links and theme toggle remain the same */}
+      <div className="flex items-center space-x-2">
+        <a href="https://gdgc.dbit.in/" target="_blank" rel="noopener noreferrer">
+          <Link className="h-5 w-5" />
         </a>
-        <a href="https://www.linkedin.com/company/google-developers-group-campus-dbit/" target="_blank" rel="noopener noreferrer" >
+        <a href="https://www.linkedin.com/company/google-developers-group-campus-dbit/" target="_blank" rel="noopener noreferrer">
           <Linkedin className="h-5 w-5" />
         </a>
-        <a href="https://www.instagram.com/gdgc.dbit/" target="_blank" rel="noopener noreferrer" >
+        <a href="https://www.instagram.com/gdgc.dbit/" target="_blank" rel="noopener noreferrer">
           <Instagram className="h-5 w-5" />
         </a>
-        <ModeToggle />
+         <ModeToggle /> 
       </div>
     </nav>
   );
 };
+
+
 
 const Dashboard = () => {
   const [students, setStudents] = useState([]);
