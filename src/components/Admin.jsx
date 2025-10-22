@@ -1,4 +1,4 @@
-// admin.jsx
+
 import React from "react";
 import { updateLeaderboard } from "./updateLeaderboard";
 

@@ -1,16 +1,16 @@
-// updateLeaderboard.js
+
 import { collection, getDocs, writeBatch, doc } from "firebase/firestore";
 import { db } from "../firebase";
 import * as XLSX from "xlsx";
 
-// --- Helpers ---
+
 const normalizeKey = (key) => (key ? key.trim().toLowerCase().replace(/[^a-z0-9]/g, "") : "");
 const parseNumberSafe = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
 
-// --- Fetch Excel data ---
+
 const fetchExcelData = async () => {
   try {
     const response = await fetch("/H.xlsx");
@@ -53,13 +53,13 @@ const fetchExcelData = async () => {
   }
 };
 
-// Comparator that **never** allows fewer completedPaths to rank above more completedPaths
+
 const unlockedComparator = (a, b) => {
   const ac = Number(a.completedPaths);
   const bc = Number(b.completedPaths);
   if (bc !== ac) return bc - ac; // more completedPaths first
 
-  // Completed equal -> if both have prevRank (and finite), use prevRank (lower better)
+  
   const aPrev = Number(a.prevRank ?? Infinity);
   const bPrev = Number(b.prevRank ?? Infinity);
   if (aPrev !== bPrev) return aPrev - bPrev;
@@ -68,7 +68,7 @@ const unlockedComparator = (a, b) => {
   return a.originalIndex - b.originalIndex;
 };
 
-// Comparator for locked finishers: previous rank preserved first, then lastCompletedAt, then name
+
 const lockedComparator = (a, b) => {
   const aPrev = Number(a.prevRank ?? Infinity);
   const bPrev = Number(b.prevRank ?? Infinity);
@@ -82,7 +82,7 @@ const lockedComparator = (a, b) => {
   return a.name.localeCompare(b.name);
 };
 
-// Validation: returns any index pairs where a lower completedPaths is ahead of a higher one
+
 const findOrderingViolations = (arr) => {
   const violations = [];
   for (let i = 0; i < arr.length - 1; i++) {
@@ -96,7 +96,7 @@ const findOrderingViolations = (arr) => {
           higher: arr[j],
           lower: arr[i],
         });
-        // stop after finding the first later that violates relative order for this i
+    
         break;
       }
     }
@@ -104,7 +104,7 @@ const findOrderingViolations = (arr) => {
   return violations;
 };
 
-// --- Main update function ---
+
 export const updateLeaderboard = async () => {
   try {
     console.log("🏁 Starting leaderboard update...");
@@ -116,7 +116,7 @@ export const updateLeaderboard = async () => {
     const previousOrder = orderSnapshot.docs.map((d) => d.data());
     console.log(`Firestore docs loaded: ${previousOrder.length}`);
 
-    // Helper: find prev by exact name (you can replace with normalized matching if needed)
+    
     const prevByName = (name) => previousOrder.find((p) => p.name === name) || null;
 
     // Enrich
@@ -125,7 +125,7 @@ export const updateLeaderboard = async () => {
       const prevLockedAndComplete = Boolean(prev?.locked) && Number(prev?.completedPaths) === Number(prev?.totalPaths);
       const isNowFinisher = Number(s.completedPaths) === Number(s.totalPaths);
       const locked = prevLockedAndComplete || isNowFinisher;
-      // prevRank preserved only if prev was locked and complete, else Infinity
+      
       const prevRank = prevLockedAndComplete ? (prev.rank ?? Infinity) : Infinity;
       return {
         ...s,
@@ -147,7 +147,7 @@ export const updateLeaderboard = async () => {
     if (newlyCompleted.length) {
       console.log(`Promoting ${newlyCompleted.length} newly completed students to locked.`);
       newlyCompleted.forEach((s) => (s.locked = true));
-      // move them to lockedStudents and remove from unlockedStudents
+    
       lockedStudents = [...lockedStudents, ...newlyCompleted];
       unlockedStudents = unlockedStudents.filter((s) => Number(s.completedPaths) !== Number(s.totalPaths));
     }
@@ -162,14 +162,13 @@ export const updateLeaderboard = async () => {
     // Assign ranks
     finalStudents.forEach((s, i) => (s.rank = i + 1));
 
-    // Validation pass — find if any student with fewer completedPaths is before someone with more
     const violations = findOrderingViolations(finalStudents);
     if (violations.length > 0) {
       console.warn("⚠️ Ordering violations detected! Will correct them. Sample violations:", violations.slice(0, 5).map(v => ({
         lowerName: v.lower.name, lowerCompleted: v.lower.completedPaths, lowerRank: v.lower.rank,
         higherName: v.higher.name, higherCompleted: v.higher.completedPaths, higherRank: v.higher.rank
       })));
-      // Correct by re-sorting strictly by completedPaths desc, then stabilized by prevRank & originalIndex
+      
       finalStudents = [
         ...finalStudents
       ].sort((a, b) => {
@@ -184,9 +183,9 @@ export const updateLeaderboard = async () => {
       });
       // reassign ranks
       finalStudents.forEach((s, i) => (s.rank = i + 1));
-      console.log("✅ Ordering corrected by strict re-sort.");
+      console.log(" Ordering corrected by strict re-sort.");
     } else {
-      console.log("✅ No ordering violations detected.");
+      console.log(" No ordering violations detected.");
     }
 
     // Final sanity log: show boundary between locked and unlocked
@@ -223,6 +222,6 @@ export const updateLeaderboard = async () => {
     await batch.commit();
     console.log(`✅ Leaderboard updated. Documents written: ${updates}`);
   } catch (err) {
-    console.error("❌ Error updating leaderboard:", err);
+    console.error(" Error updating leaderboard:", err);
   }
 };

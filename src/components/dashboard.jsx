@@ -40,7 +40,7 @@ const fetchExcelData = async () => {
     k.toLowerCase().includes('arcade')
   );
 
-  // Debug: show which key was matched
+  
   console.log("Detected arcade key:", arcadeKey);
 
   const valRaw = arcadeKey ? row[arcadeKey] : '';
@@ -49,7 +49,7 @@ const fetchExcelData = async () => {
   const val = (valRaw ?? '').toString().trim();
   console.log("Processed arcade string value:", val);
 
-  // Handle numeric or string
+
   if (val === '1' || val === '1.0' || val === 'yes' || val === 'true') return 'Yes';
   if (val === '0' || val === '0.0' || val === 'no' || val === 'false') return 'No';
 
@@ -103,7 +103,7 @@ const ModeToggle = () => {
   );
 };
 
-// --- 1. Countdown Logic (Reusable Hook) ---
+
 const useCountdown = (targetDate) => {
   const [timeLeft, setTimeLeft] = useState(0);
 
@@ -114,7 +114,7 @@ const useCountdown = (targetDate) => {
   }, [targetDate]);
 
   useEffect(() => {
-    // Run once on mount to avoid initial delay
+    
     calculateTimeLeft();
     
     const timer = setInterval(calculateTimeLeft, 1000);
@@ -135,13 +135,13 @@ const useCountdown = (targetDate) => {
 };
 
 
-// --- 2. Your Updated Navbar Component ---
+
 const Navbar = () => {
   // Set the end date for the countdown
   const targetTimestamp = useMemo(() => new Date('October 30, 2025 23:59:00').getTime(), []);
   const { days, hours, minutes, expired } = useCountdown(targetTimestamp);
   
-  // Helper to add a leading zero (e.g., 9 -> "09")
+  
   const pad = (num) => String(num).padStart(2, '0');
 
   const TimerDisplay = () => {
@@ -166,7 +166,6 @@ const Navbar = () => {
     <nav className="flex items-center border-b bg-background py-4 px-4 sm:px-6">
       <img src='/logo.png' className='mr-2 h-[2rem]' alt="Logo"/>
       
-      {/* Title and Timer are now grouped together for better alignment */}
       <div className="mr-auto flex items-center">
         <h1 className="truncate text-lg font-bold sm:text-xl">
           <span className="hidden sm:inline">Google Developer Group on Campus</span>
@@ -175,7 +174,7 @@ const Navbar = () => {
         <TimerDisplay />
       </div>
 
-      {/* Social links and theme toggle remain the same */}
+    
       <div className="flex items-center space-x-2">
         <a href="https://gdgc.dbit.in/" target="_blank" rel="noopener noreferrer">
           <Link className="h-5 w-5" />
@@ -406,12 +405,10 @@ const Dashboard = () => {
                 }
 
                 // 2. Sort the students by the saved 'rank' field
-                // This is crucial because Firestore queries don't guarantee order without an 'orderBy' clause,
-                // and sorting by the stored rank is faster than fetching in order.
+            
                 finalStudents.sort((a, b) => a.rank - b.rank);
                 
-                // 3. Set Final State
-                // The 'id' is generated here for React keying, if the 'name' isn't used as the key.
+                
                 setStudents(finalStudents.map((s, i) => ({ ...s, id: i + 1 })));
                 
                 clearTimeout(timeout);
