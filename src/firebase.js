@@ -5,7 +5,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAIxMwqKK2UNNOaInAOo5C62h3WejIfgFM",
   authDomain: "leaderboardorder.firebaseapp.com",
   projectId: "leaderboardorder",
-  storageBucket: "leaderboardorder.appspot.com", // ✅ fixed
+  storageBucket: "leaderboardorder.appspot.com", // ✅ fixedcd
   messagingSenderId: "257786521113",
   appId: "1:257786521113:web:ec2025848331e430dfac88"
 };
